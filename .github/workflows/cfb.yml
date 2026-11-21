@@ -1,0 +1,31 @@
+name: cfb-injuries
+# Public repo: Actions minutes are free. Saturdays every 15 min (game day), Tue–Fri every 30 min (weeknight games),
+# Sun/Mon hourly. The browser reads cfb.json straight from raw.githubusercontent.com (CORS open), no site rebuild.
+on:
+  schedule:
+    - cron: "*/15 * * * 6"
+    - cron: "5,35 * * * 2-5"
+    - cron: "20 * * * 0,1"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [fetch_cfb.py, .github/workflows/cfb.yml]
+concurrency: { group: cfb-feed, cancel-in-progress: false }
+permissions: { contents: write }
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: python fetch_cfb.py
+      - name: commit
+        run: |
+          git config user.name "hv-injury-feed"
+          git config user.email "actions@users.noreply.github.com"
+          git add cfb.json cache
+          git diff --cached --quiet && exit 0
+          git commit -qm "cfb.json $(date -u +%FT%TZ)"
+          for i in 1 2 3; do git pull -q --rebase origin main && git push -q && exit 0; sleep 5; done; exit 1
